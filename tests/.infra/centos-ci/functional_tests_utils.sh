@@ -241,10 +241,16 @@ function installCheCtl() {
   echo "======== chectl has been installed successfully ========"
 }
 
+function getOpenshiftLogs() {
+    oc logs $(oc get pods --selector=component=che -o jsonpath="{.items[].metadata.name}")  || true
+    oc logs $(oc get pods --selector=component=keycloak -o jsonpath="{.items[].metadata.name}") || true
+}
+
 function deployCheIntoCluster() {
   echo "======== Start to install CHE ========"
-  if chectl server:start -a operator -p openshift --k8spodreadytimeout=360000 --listr-renderer=verbose; then
+  if chectl server:start -a operator -p openshift --k8spodreadytimeout=360000 $1 $2; then
     echo "Started succesfully"
+    oc get checluster -o yaml
   else
     echo "======== oc get events ========"
     oc get events
@@ -254,9 +260,9 @@ function deployCheIntoCluster() {
     # docker ps
     # echo "==== docker ps -q | xargs -L 1 docker logs ===="
     # docker ps -q | xargs -L 1 docker logs | true
-    oc logs $(oc get pods --selector=component=che -o jsonpath="{.items[].metadata.name}") || true
-    oc logs $(oc get pods --selector=component=keycloak -o jsonpath="{.items[].metadata.name}") || true
+    getOpenshiftLogs
     curl -vL http://keycloak-che.${LOCAL_IP_ADDRESS}.nip.io/auth/realms/che/.well-known/openid-configuration
+    oc get checluster -o yaml || true
     exit 1337
   fi
 }
@@ -338,10 +344,13 @@ function setupEnvs() {
     CHE_OSS_SONATYPE_PASSPHRASE \
     QUAY_ECLIPSE_CHE_USERNAME \
     QUAY_ECLIPSE_CHE_PASSWORD)"
+
+  export PATH=$PATH:/opt/rh/rh-maven33/root/bin
 }
 
 function configureGithubTestUser() {
   echo "Configure GitHub test users"
+  cd /root/payload
   mkdir -p che_local_conf_dir
   export CHE_LOCAL_CONF_DIR=/root/payload/che_local_conf_dir/
   rm -f che_local_conf_dir/selenium.properties
@@ -355,4 +364,20 @@ function installDockerCompose() {
   echo "Install docker compose"
   sudo curl -L "https://github.com/docker/compose/releases/download/1.25.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
   sudo chmod +x /usr/local/bin/docker-compose
+}
+
+function seleniumTestsSetup() {
+  echo "Start selenium tests"
+  cd /root/payload
+  export CHE_INFRASTRUCTURE=openshift
+  defindCheRoute
+
+  mvn clean install -pl :che-selenium-test -am -DskipTests=true -U
+  configureGithubTestUser
+}
+
+function saveSeleniumTestResult() {
+  mkdir -p /root/payload/report
+  mkdir -p /root/payload/report/site
+  cp -r /root/payload/tests/legacy-e2e/che-selenium-test/target/site report
 }

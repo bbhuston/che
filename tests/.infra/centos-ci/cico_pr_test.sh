@@ -11,57 +11,47 @@ set +x
 source tests/.infra/centos-ci/functional_tests_utils.sh
 
 echo "****** Starting RH-Che PR check $(date) ******"
-export BASEDIR=$(pwd)
-echo $BASEDIR
-export PATH=$PATH:/opt/rh/rh-maven33/root/bin
 export PR=15818
 export TAG=PR-${PR}
 
 setupEnvs
 installDependencies
 installDockerCompose
-
-#mvn clean install -Pintegration
-#bash dockerfiles/che/build.sh --organization:quay.io/eclipse --tag:${TAG} --dockerfile:Dockerfile
-#
-#docker login -u "${QUAY_ECLIPSE_CHE_USERNAME}" -p "${QUAY_ECLIPSE_CHE_PASSWORD}" "quay.io"
-#docker push "quay.io/eclipse/che-server:${TAG}"
-
 installKVM
 installAndStartMinishift
 loginToOpenshiftAndSetDevRole
 installCheCtl
 
-echo "Deploy Eclipse Che"
-cd /tmp
-wget https://raw.githubusercontent.com/eclipse/che-operator/master/deploy/crds/org_v1_che_cr.yaml -O custom-resource.yaml
-sed -i "s@server:@server:\n    customCheProperties:\n      CHE_LIMITS_USER_WORKSPACES_RUN_COUNT: '-1'@g" /tmp/custom-resource.yaml
-sed -i "s/customCheProperties:/customCheProperties:\n      CHE_WORKSPACE_AGENT_DEV_INACTIVE__STOP__TIMEOUT__MS: '300000'/" /tmp/custom-resource.yaml
-sed -i "s@cheImage: ''@cheImage: 'quay.io/eclipse/che-server'@g" /tmp/custom-resource.yaml
-sed -i "s@cheImageTag: 'nightly'@cheImageTag: '${TAG}'@g" /tmp/custom-resource.yaml
-cat /tmp/custom-resource.yaml
+buidCheServer
+pushImageToRegistry
 
-chectl server:start -a operator -p openshift --k8spodreadytimeout=360000 --listr-renderer=verbose --chenamespace=eclipse-che --che-operator-cr-yaml=/tmp/custom-resource.yaml
-oc get checluster -o yaml
-
-echo "Start selenium tests"
-export CHE_INFRASTRUCTURE=openshift
-CHE_ROUTE=$(oc get route che --template='{{ .spec.host }}')
-
-cd ${BASEDIR}
-mvn clean install -pl :che-selenium-test -am -DskipTests=true -U
-configureGithubTestUser
+deployCheIntoCluster  --chenamespace=eclipse-che --che-operator-cr-yaml=/tmp/custom-resource.yaml
+seleniumTestsSetup
 
 #bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --host=${CHE_ROUTE} --port=80 --multiuser --test=CreateAndDeleteProjectsTest
 #bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=4 --host=${CHE_ROUTE} --port=80 --multiuser --test=org.eclipse.che.selenium.dashboard.**
 bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=3 --host=${CHE_ROUTE} --port=80 --multiuser
 
-/tmp/oc login -u system:admin
-/tmp/oc get events --all-namespaces
-/tmp/oc logs deployments/che || true
-
-mkdir -p /root/payload/report
-mkdir -p /root/payload/report/site
-cp -r /root/payload/tests/legacy-e2e/che-selenium-test/target/site report
-
+saveSeleniumTestResult
+getOpenshiftLogs
 archiveArtifacts "che-pullrequests-test-temporary"
+
+function prepareCustomResourceFile() {
+  cd /tmp
+  wget https://raw.githubusercontent.com/eclipse/che-operator/master/deploy/crds/org_v1_che_cr.yaml -O custom-resource.yaml
+  sed -i "s@server:@server:\n    customCheProperties:\n      CHE_LIMITS_USER_WORKSPACES_RUN_COUNT: '-1'@g" /tmp/custom-resource.yaml
+  sed -i "s/customCheProperties:/customCheProperties:\n      CHE_WORKSPACE_AGENT_DEV_INACTIVE__STOP__TIMEOUT__MS: '300000'/" /tmp/custom-resource.yaml
+  sed -i "s@cheImage: ''@cheImage: 'quay.io/eclipse/che-server'@g" /tmp/custom-resource.yaml
+  sed -i "s@cheImageTag: 'nightly'@cheImageTag: '${TAG}'@g" /tmp/custom-resource.yaml
+  cat /tmp/custom-resource.yaml
+}
+
+function buidCheServer() {
+  mvn clean install -Pintegration
+  bash dockerfiles/che/build.sh --organization:quay.io/eclipse --tag:${TAG} --dockerfile:Dockerfile
+}
+
+function pushImageToRegistry() {
+  docker login -u "${QUAY_ECLIPSE_CHE_USERNAME}" -p "${QUAY_ECLIPSE_CHE_PASSWORD}" "quay.io"
+  docker push "quay.io/eclipse/che-server:${TAG}"
+}
