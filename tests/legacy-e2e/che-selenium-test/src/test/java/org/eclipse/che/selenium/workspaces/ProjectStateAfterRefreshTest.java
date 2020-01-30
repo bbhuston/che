@@ -34,7 +34,7 @@ import org.testng.annotations.Test;
  * @author Andrey chizhikov TODO turn on the test after https://github.com/eclipse/che/issues/15317
  *     resolved
  */
-@Test(groups = UNDER_REPAIR)
+@Test
 public class ProjectStateAfterRefreshTest {
   private static final String WORKSPACE_NAME =
       generate(ProjectStateAfterRefreshTest.class.getSimpleName(), 5);

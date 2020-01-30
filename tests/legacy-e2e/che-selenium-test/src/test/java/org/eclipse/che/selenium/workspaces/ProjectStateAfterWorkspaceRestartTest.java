@@ -35,7 +35,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 /** @author Aleksandr Shmaraev on 10.03.16 * */
-@Test(groups = {UNDER_REPAIR})
+@Test
 public class ProjectStateAfterWorkspaceRestartTest {
 
   private static final String WORKSPACE_NAME =
