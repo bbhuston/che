@@ -42,6 +42,7 @@ pushImageToRegistry
 installKVM
 installAndStartMinishift
 loginToOpenshiftAndSetDevRole
+prepareCustomResourceFile
 installCheCtl
 
 deployCheIntoCluster  --chenamespace=eclipse-che --che-operator-cr-yaml=/tmp/custom-resource.yaml

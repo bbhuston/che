@@ -261,7 +261,7 @@ function deployCheIntoCluster() {
     # echo "==== docker ps -q | xargs -L 1 docker logs ===="
     # docker ps -q | xargs -L 1 docker logs | true
     getOpenshiftLogs
-    curl -vL http://keycloak-che.${LOCAL_IP_ADDRESS}.nip.io/auth/realms/che/.well-known/openid-configuration
+    curl -vL http://keycloak-che.${LOCAL_IP_ADDRESS}.nip.io/auth/realms/che/.well-known/openid-configuration || true
     oc get checluster -o yaml || true
     exit 1337
   fi
