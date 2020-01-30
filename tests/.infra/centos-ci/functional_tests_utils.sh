@@ -1,6 +1,7 @@
+
 #!/usr/bin/env bash
 
-# Copyright (c) 2017 Red Hat, Inc.
+# Copyright (c) 2020 Red Hat, Inc.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # which accompanies this distribution, and is available at
@@ -241,10 +242,16 @@ function installCheCtl() {
   echo "======== chectl has been installed successfully ========"
 }
 
+function getOpenshiftLogs() {
+    oc logs $(oc get pods --selector=component=che -o jsonpath="{.items[].metadata.name}")  || true
+    oc logs $(oc get pods --selector=component=keycloak -o jsonpath="{.items[].metadata.name}") || true
+}
+
 function deployCheIntoCluster() {
   echo "======== Start to install CHE ========"
-  if chectl server:start -a operator -p openshift --k8spodreadytimeout=360000 --listr-renderer=verbose; then
+  if chectl server:start -a operator -p openshift --k8spodreadytimeout=360000 $1 $2; then
     echo "Started succesfully"
+    oc get checluster -o yaml
   else
     echo "======== oc get events ========"
     oc get events
@@ -254,9 +261,9 @@ function deployCheIntoCluster() {
     # docker ps
     # echo "==== docker ps -q | xargs -L 1 docker logs ===="
     # docker ps -q | xargs -L 1 docker logs | true
-    oc logs $(oc get pods --selector=component=che -o jsonpath="{.items[].metadata.name}") || true
-    oc logs $(oc get pods --selector=component=keycloak -o jsonpath="{.items[].metadata.name}") || true
+    getOpenshiftLogs
     curl -vL http://keycloak-che.${LOCAL_IP_ADDRESS}.nip.io/auth/realms/che/.well-known/openid-configuration
+    oc get checluster -o yaml || true
     exit 1337
   fi
 }
@@ -338,12 +345,15 @@ function setupEnvs() {
     CHE_OSS_SONATYPE_PASSPHRASE \
     QUAY_ECLIPSE_CHE_USERNAME \
     QUAY_ECLIPSE_CHE_PASSWORD)"
+
+  export PATH=$PATH:/opt/rh/rh-maven33/root/bin
 }
 
 function configureGithubTestUser() {
   echo "Configure GitHub test users"
+  cd /root/payload
   mkdir -p che_local_conf_dir
-  export CHE_LOCAL_CONF_DIR=/che_local_conf_dir/
+  export CHE_LOCAL_CONF_DIR=/root/payload/che_local_conf_dir/
   rm -f che_local_conf_dir/selenium.properties
   echo "github.username=che6ocpmulti" >> che_local_conf_dir/selenium.properties
   echo "github.password=CheMain2017" >> che_local_conf_dir/selenium.properties
@@ -357,12 +367,18 @@ function installDockerCompose() {
   sudo chmod +x /usr/local/bin/docker-compose
 }
 
-function installApacheMaven() {
-  echo "Install maven"
-  curl -L http://mirrors.ukfast.co.uk/sites/ftp.apache.org/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -C /opt -xzv
-  export M2_HOME=/opt/apache-maven-3.3.9
-  export M2=$M2_HOME/bin
-  export PATH=$M2:/tmp:$PATH
-  export JAVA_HOME=/usr/
-  mvn --version
+function seleniumTestsSetup() {
+  echo "Start selenium tests"
+  cd /root/payload
+  export CHE_INFRASTRUCTURE=openshift
+  defindCheRoute
+
+  mvn clean install -pl :che-selenium-test -am -DskipTests=true -U
+  configureGithubTestUser
+}
+
+function saveSeleniumTestResult() {
+  mkdir -p /root/payload/report
+  mkdir -p /root/payload/report/site
+  cp -r /root/payload/tests/legacy-e2e/che-selenium-test/target/site report
 }
