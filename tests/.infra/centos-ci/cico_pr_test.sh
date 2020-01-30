@@ -14,28 +14,6 @@ echo "****** Starting RH-Che PR check $(date) ******"
 export PR=15818
 export TAG=PR-${PR}
 
-setupEnvs
-installDependencies
-installDockerCompose
-installKVM
-installAndStartMinishift
-loginToOpenshiftAndSetDevRole
-installCheCtl
-
-buidCheServer
-pushImageToRegistry
-
-deployCheIntoCluster  --chenamespace=eclipse-che --che-operator-cr-yaml=/tmp/custom-resource.yaml
-seleniumTestsSetup
-
-#bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --host=${CHE_ROUTE} --port=80 --multiuser --test=CreateAndDeleteProjectsTest
-#bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=4 --host=${CHE_ROUTE} --port=80 --multiuser --test=org.eclipse.che.selenium.dashboard.**
-bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=3 --host=${CHE_ROUTE} --port=80 --multiuser
-
-saveSeleniumTestResult
-getOpenshiftLogs
-archiveArtifacts "che-pullrequests-test-temporary"
-
 function prepareCustomResourceFile() {
   cd /tmp
   wget https://raw.githubusercontent.com/eclipse/che-operator/master/deploy/crds/org_v1_che_cr.yaml -O custom-resource.yaml
@@ -55,3 +33,24 @@ function pushImageToRegistry() {
   docker login -u "${QUAY_ECLIPSE_CHE_USERNAME}" -p "${QUAY_ECLIPSE_CHE_PASSWORD}" "quay.io"
   docker push "quay.io/eclipse/che-server:${TAG}"
 }
+
+setupEnvs
+installDependencies
+installDockerCompose
+buidCheServer
+pushImageToRegistry
+installKVM
+installAndStartMinishift
+loginToOpenshiftAndSetDevRole
+installCheCtl
+
+deployCheIntoCluster  --chenamespace=eclipse-che --che-operator-cr-yaml=/tmp/custom-resource.yaml
+seleniumTestsSetup
+
+#bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --host=${CHE_ROUTE} --port=80 --multiuser --test=CreateAndDeleteProjectsTest
+#bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=4 --host=${CHE_ROUTE} --port=80 --multiuser --test=org.eclipse.che.selenium.dashboard.**
+bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=3 --host=${CHE_ROUTE} --port=80 --multiuser
+
+saveSeleniumTestResult
+getOpenshiftLogs
+archiveArtifacts "che-pullrequests-test-temporary"
