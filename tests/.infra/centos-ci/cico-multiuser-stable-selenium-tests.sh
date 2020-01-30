@@ -4,33 +4,26 @@
 # are made available under the terms of the Eclipse Public License v1.0
 # which accompanies this distribution, and is available at
 # http://www.eclipse.org/legal/epl-v10.html
-set -e
+set -x
 
 echo "========Starting nigtly test job $(date)========"
 
 source tests/.infra/centos-ci/functional_tests_utils.sh
 source .ci/cico_common.sh
 
-installDependencies
-
-export CHE_INFRASTRUCTURE=openshift
-export PATH=$PATH:/opt/rh/rh-maven33/root/bin
-
-
-
 installKVM
 installDependencies
 installCheCtl
 installAndStartMinishift
 loginToOpenshiftAndSetDevRole
-chectl server:start -a operator -p openshift --k8spodreadytimeout=360000 --chenamespace=eclipse-che
+deployCheIntoCluster --chenamespace=eclipse-che --che-operator
+seleniumTestsSetup
 createTestUserAndObtainUserToken
 installDockerCompose
-defindCheRoute
-mvn clean install -pl :che-selenium-test -am -DskipTests=true -U
-cd tests/legacy-e2e/che-selenium-test
-bash selenium-tests.sh --threads=4 --host=${CHE_ROUTE} --port=80 --multiuser
+seleniumTestsSetup
+bash tests/legacy-e2e/che-selenium-test/selenium-tests.sh --threads=3 --host=${CHE_ROUTE} --port=80 --multiuser
+saveSeleniumTestResult
+getOpenshiftLogs
+archiveArtifacts "che-nigthly-multiuser-stable-test"
 
-#createTestWorkspaceAndRunTest
-#archiveArtifacts "che-nightly"
 
